@@ -1,16 +1,15 @@
 {
-  "private": true,
-  "displayName": "Plugin Name",
-  "name": "homebridge-plugin-name",
-  "version": "1.0.0",
-  "description": "A short description about what your plugin does.",
+  "name": "homebridge-yeelight-ble",
+  "version": "1.0.0-0",
+  "displayName": "Yeelight BLE",
+  "description": "Homebridge plugin for Yeelight bluetooth lamps",
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
-    "url": "https://github.com/USERNAME/GITHUB_PROJECT_NAME.git"
+    "url": "https://github.com/vsternbach/homebridge-yeelight-ble"
   },
   "bugs": {
-    "url": "https://github.com/USERNAME/GITHUB_PROJECT_NAME/issues"
+    "url": "https://github.com/vsternbach/homebridge-yeelight-ble/issues"
   },
   "engines": {
     "node": "^18.17.0",
@@ -21,12 +20,26 @@
     "lint": "eslint src/**.ts --max-warnings=0",
     "watch": "npm run build && npm link && nodemon",
     "build": "rimraf ./dist && tsc",
-    "prepublishOnly": "npm run lint && npm run build"
+    "prepublishOnly": "npm run lint && npm run build",
+    "nodemon": "nodemon"
   },
   "keywords": [
-    "homebridge-plugin"
+    "homebridge-plugin",
+    "homebridge-yeelight",
+    "homebridge-yeelight-ble",
+    "homebridge-yeelightble",
+    "yeelight",
+    "yeelightble",
+    "yeelight ble",
+    "yeelight bt",
+    "yeelight bluetooth",
+    "yeelight candela",
+    "candela"
   ],
-  "dependencies": {},
+  "dependencies": {
+    "ioredis": "^5.3.2",
+    "rxjs": "^7.8.1"
+  },
   "devDependencies": {
     "@types/node": "^18.16.20",
     "@typescript-eslint/eslint-plugin": "^5.62.0",

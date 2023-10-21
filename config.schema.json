@@ -1,7 +1,8 @@
 {
-  "pluginAlias": "ExampleHomebridgePlugin",
+  "pluginAlias": "Yeelight BLE",
   "pluginType": "platform",
   "singular": true,
+  "headerDisplay": "This plugin is supposed to communicate with [yeelightble](https://github.com/vsternbach/yeelightble) through redis",
   "schema": {
     "type": "object",
     "properties": {
@@ -9,7 +10,50 @@
         "title": "Name",
         "type": "string",
         "required": true,
-        "default": "Example Dynamic Platform"
+        "default": "Yeelight BLE"
+      },
+      "redis": {
+        "title": "Redis",
+        "required": false,
+        "type": "object",
+        "properties": {
+          "host": {
+            "title": "Host",
+            "type": "string",
+            "required": false,
+            "placeholder": "localhost"
+          },
+          "port": {
+            "title": "Port",
+            "description": "You need to have redis server installed and running (by default localhost:6379)",
+            "type": "number",
+            "minimum": 0,
+            "maximum": 65536,
+            "required": false,
+            "placeholder": 6379
+          }
+        }
+      },
+      "devices": {
+        "title": "Devices",
+        "type": "array",
+        "required": true,
+        "items": {
+          "title": "Device",
+          "type": "object",
+          "properties": {
+            "name": {
+              "title": "Display Name",
+              "type": "string",
+              "required": true
+            },
+            "mac": {
+              "title": "MAC Address",
+              "type": "string",
+              "required": true
+            }
+          }
+        }
       }
     }
   }
