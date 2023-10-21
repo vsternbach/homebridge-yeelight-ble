@@ -1,6 +1,6 @@
 {
   "name": "homebridge-yeelight-ble",
-  "version": "1.0.0-0",
+  "version": "1.0.0",
   "displayName": "Yeelight BLE",
   "description": "Homebridge plugin for Yeelight bluetooth lamps",
   "license": "Apache-2.0",
