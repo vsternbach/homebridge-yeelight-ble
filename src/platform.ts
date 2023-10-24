@@ -2,7 +2,7 @@ import { API, DynamicPlatformPlugin, Logger, PlatformAccessory, PlatformConfig, 
 import { PLATFORM_NAME, PLUGIN_NAME } from './settings';
 import { YeelightNgPlatformAccessory } from './platformAccessory';
 import { CommandPayload, CommandType, State } from './types';
-import { PubSub } from './pubSub';
+import {WebSocketClient} from './ws';
 
 export interface Device {
   mac: string;
@@ -21,12 +21,11 @@ export class YeelightNgPlatform implements DynamicPlatformPlugin {
   // this is used to track restored cached accessories
   readonly accessories: PlatformAccessory<Device>[] = [];
 
-  private pubSub!: PubSub;
+  private ws!: WebSocketClient;
   private stateHandlers = new Map<string, (state: State) => void>();
 
   constructor(readonly log: Logger, readonly config: PlatformConfig, readonly api: API) {
-    this.pubSub = new PubSub(log, config.redis || {});
-    this.pubSub.subscribe(this.stateHandlers);
+    this.ws = new WebSocketClient(this.stateHandlers, log, config.websocket);
     this.log.debug('Finished initializing platform:', this.config.name);
 
     // When this event is fired it means Homebridge has restored all cached accessories from disk.
@@ -39,7 +38,7 @@ export class YeelightNgPlatform implements DynamicPlatformPlugin {
     });
 
     this.api.on('shutdown', () => {
-      this.pubSub.unsubscribe();
+      this.ws.close();
     });
   }
 
@@ -99,7 +98,7 @@ export class YeelightNgPlatform implements DynamicPlatformPlugin {
     this.log.debug(`Publish for uuid:${uuid} type:${type} payload: ${payload}`);
     const command = { type, payload };
     const message = JSON.stringify({ command, uuid });
-    this.pubSub.publish(message);
+    this.ws.send(message);
   }
 
   registerStateHandler(uuid: string, handler: (state: State) => void) {

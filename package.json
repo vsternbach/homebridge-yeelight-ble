@@ -37,11 +37,12 @@
     "candela"
   ],
   "dependencies": {
-    "ioredis": "^5.3.2",
-    "rxjs": "^7.8.1"
+    "rxjs": "^7.8.1",
+    "ws": "^8.14.2"
   },
   "devDependencies": {
     "@types/node": "^18.16.20",
+    "@types/ws": "^8.5.8",
     "@typescript-eslint/eslint-plugin": "^5.62.0",
     "@typescript-eslint/parser": "^5.62.0",
     "eslint": "^8.45.0",

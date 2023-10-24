@@ -12,8 +12,8 @@
         "required": true,
         "default": "Yeelight BLE"
       },
-      "redis": {
-        "title": "Redis",
+      "websocket": {
+        "title": "Websocket",
         "required": false,
         "type": "object",
         "properties": {
@@ -25,12 +25,11 @@
           },
           "port": {
             "title": "Port",
-            "description": "You need to have redis server installed and running (by default localhost:6379)",
             "type": "number",
             "minimum": 0,
             "maximum": 65536,
             "required": false,
-            "placeholder": 6379
+            "placeholder": 8765
           }
         }
       },
