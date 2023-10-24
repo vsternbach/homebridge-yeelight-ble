@@ -11,7 +11,7 @@ export class WebSocketClient {
   constructor(
     private stateHandlers: Map<string, (state: State) => void>,
     private log: Logger,
-    { host = 'localhost', port = 8765 } = {},
+    { host = '0.0.0.0', port = 8765 } = {},
   ) {
     this.address = `ws://${host}:${port}`;
     this.connect();

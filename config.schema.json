@@ -2,7 +2,7 @@
   "pluginAlias": "Yeelight BLE",
   "pluginType": "platform",
   "singular": true,
-  "headerDisplay": "This plugin is supposed to communicate with [yeelightble](https://github.com/vsternbach/yeelightble) through redis",
+  "headerDisplay": "This plugin is designed to work with [yeelightble](https://github.com/vsternbach/yeelightble) through WebSocket",
   "schema": {
     "type": "object",
     "properties": {
@@ -21,7 +21,7 @@
             "title": "Host",
             "type": "string",
             "required": false,
-            "placeholder": "localhost"
+            "placeholder": "0.0.0.0"
           },
           "port": {
             "title": "Port",
