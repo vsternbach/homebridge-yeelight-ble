@@ -1,0 +1,177 @@
+<div class="card">
+  <div id="scanHeader" class="card-header text-center btn-deep-purple">Scan Bluetooth Devices</div>
+
+  <div id="scanBody" class="collapse">
+    <div class="card-body">
+      <form>
+        <div class="form-row">
+          <div class="col">
+            <label for="nameInput">Name</label>
+            <input class="form-control" id="nameInput" required type="text">
+            <small id="nameHelp" class="form-text text-muted">Filter by device name (leave blank to see all results)</small>
+          </div>
+          <div class="col">
+            <label for="timeoutInput">Duration</label>
+            <input class="form-control" id="timeoutInput" required type="number" value="3">
+            <small id="timeoutHelp" class="form-text text-muted">Search duration in seconds</small>
+          </div>
+          <button class="btn btn-primary" id="scan" type="button">Scan</button>
+        </div>
+        <div id="deviceTable" class="text-center device-table" style="display: none">
+          <table class="table table-sm">
+            <thead>
+            <tr>
+              <th scope="col">Name</th>
+              <th scope="col">Mac Address</th>
+              <th scope="col">Add Device</th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr>
+              <td>No devices found!</td>
+            </tr>
+            </tbody>
+          </table>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+<style>
+  body {
+    padding: 0 !important;
+  }
+
+  #scanHeader {
+    cursor: pointer;
+    border-radius: 5px;
+  }
+
+  #scan {
+    margin: 31px 5px;
+    height: 38px;
+  }
+
+  .btn-add-device {
+    height: 24px;
+    line-height: normal;
+    font-size: 12px;
+    margin: 0;
+  }
+
+  .device-table {
+    max-height: 270px;
+    overflow: scroll;
+  }
+
+  .spinner-border {
+    height: 1rem;
+    width: 1rem;
+  }
+</style>
+<script>
+  const {homebridge} = window;
+
+  (async () => {
+    homebridge.showSpinner();
+
+    function setConfig(config) {
+      config.devices = config.devices || [];
+      return config;
+    }
+
+    // get the initial config - this is an array potentially containing multiple config blocks
+    const pluginConfig = await homebridge.getPluginConfig();
+    const configSchema = await homebridge.getPluginConfigSchema();
+
+    if (!pluginConfig.length) {
+      pluginConfig.push({});
+    }
+    let configuration = setConfig(pluginConfig[0]);
+
+    const deviceTable = document.getElementById('deviceTable');
+    const scanButton = document.getElementById('scan');
+    const scanHeader = document.getElementById('scanHeader');
+    const scanBody = document.getElementById('scanBody');
+
+    function createForm() {
+      const configForm = homebridge.createForm(configSchema, configuration);
+      configForm.onChange(async (config) => {
+        await homebridge.updatePluginConfig([config]);
+        configuration = setConfig(config)
+      })
+    }
+
+    function showDeviceTable(devices) {
+      const tableBody = deviceTable.querySelector('tbody');
+      tableBody.innerHTML = '';
+
+      if (devices) {
+        devices.forEach(function (device) {
+          const exist = configuration.devices.some(d => d.mac === device.mac);
+          const button = exist ? '<i class="fa fa-check-circle" title="Device exists"></i>' : `<button title="Add device" type="button" class="btn btn-primary btn-add-device">+</button>`;
+          const tableEntry = `<tr><td>${device.name}</td><td>${device.mac}</td><td>${button}</td></tr>`;
+          tableBody.insertAdjacentHTML('beforeend', tableEntry);
+        });
+      } else {
+        tableBody.innerHTML = `<tr><td>No devices found!</td></tr>`;
+      }
+      deviceTable.style.display = 'block';
+    }
+
+    scanHeader.addEventListener('click', function (e) {
+      e.preventDefault();
+      const isClosed = scanBody.classList.contains('collapse');
+      scanBody.className = isClosed ? 'expand' : 'collapse';
+    })
+
+    // Add a click event handler to the table
+    deviceTable.addEventListener('click', function(event) {
+      if (event.target.classList.contains('btn-add-device')) {
+        const row = event.target.closest('tr');
+        const name = row.querySelector('td:nth-child(1)').textContent || 'Unknown';
+        const mac = row.querySelector('td:nth-child(2)').textContent;
+
+        const exist = configuration.devices.some(d => d.mac === mac);
+        if (exist) {
+          homebridge.toast.error('Device already exists');
+          return;
+        }
+        configuration.devices.push({name, mac})
+        createForm();
+        homebridge.toast.success('Device was added')
+      }
+    });
+
+    scanButton.addEventListener('click', async function(event) {
+      event.preventDefault();
+      const btn = event.target;
+      const nameInput = document.getElementById('nameInput');
+      const timeoutInput = document.getElementById('timeoutInput');
+      let name = nameInput.value;
+      let timeout = timeoutInput.value;
+
+      deviceTable.style.display = 'none';
+      btn.disabled = true;
+      btn.innerHTML = '<div class="spinner-border" role="status"><span class="sr-only">Loading...</span></div>';
+
+      try {
+        const devices = await homebridge.request('/scan', { name, timeout });
+        if (devices?.length) {
+          showDeviceTable(devices);
+        } else {
+          homebridge.toast.warning('No devices found');
+        }
+      } catch (e) {
+        homebridge.toast.error('Error scanning for devices');
+      }
+
+      btn.disabled = false;
+      btn.innerHTML = 'Scan';
+    });
+
+    createForm();
+
+    homebridge.hideSpinner();
+  })();
+</script>

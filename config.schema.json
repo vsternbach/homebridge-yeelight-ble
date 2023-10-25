@@ -1,6 +1,7 @@
 {
   "pluginAlias": "Yeelight BLE",
   "pluginType": "platform",
+  "customUi": true,
   "singular": true,
   "headerDisplay": "This plugin is designed to work with [yeelightble](https://github.com/vsternbach/yeelightble) through WebSocket",
   "schema": {
@@ -55,5 +56,47 @@
         }
       }
     }
-  }
+  },
+  "layout": [
+    {
+      "key": "name",
+      "title": "Name"
+    },
+    {
+      "type": "section",
+      "title": "WebSocket Configuration",
+      "display": "flex",
+      "flex-direction": "row",
+      "expandable": true,
+      "expanded": false,
+      "items": [
+        {
+          "key": "websocket.host"
+        },
+        {
+          "key": "websocket.port"
+        }
+      ]
+    },
+    {
+      "key": "devices",
+      "title": "Devices",
+      "type": "section",
+      "items": [
+        {
+          "type": "div",
+          "displayFlex": true,
+          "flex-direction": "row",
+          "items": [
+            {
+              "key": "devices[].name"
+            },
+            {
+              "key": "devices[].mac"
+            }
+          ]
+        }
+      ]
+    }
+  ]
 }

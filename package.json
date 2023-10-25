@@ -37,6 +37,7 @@
     "candela"
   ],
   "dependencies": {
+    "@homebridge/plugin-ui-utils": "^1.0.0",
     "rxjs": "^7.8.1",
     "ws": "^8.14.2"
   },
