@@ -1,8 +1,7 @@
 import { API, DynamicPlatformPlugin, Logger, PlatformAccessory, PlatformConfig, Service, Characteristic } from 'homebridge';
 import { PLATFORM_NAME, PLUGIN_NAME } from './settings';
 import { YeelightNgPlatformAccessory } from './platformAccessory';
-import { CommandPayload, CommandType, State } from './types';
-import { WebSocketClient } from './ws';
+import NodeBle, { createBluetooth } from 'node-ble';
 
 export interface Device {
   mac: string;
@@ -20,12 +19,11 @@ export class YeelightNgPlatform implements DynamicPlatformPlugin {
 
   // this is used to track restored cached accessories
   readonly accessories: PlatformAccessory<Device>[] = [];
-
-  private ws!: WebSocketClient;
-  private stateHandlers = new Map<string, (state: State) => void>();
+  bleAdapter!: NodeBle.Adapter;
 
   constructor(readonly log: Logger, readonly config: PlatformConfig, readonly api: API) {
-    this.ws = new WebSocketClient(this.stateHandlers, log, config.websocket);
+    const { bluetooth, destroy } = createBluetooth();
+    bluetooth.defaultAdapter().then(adapter => this.bleAdapter = adapter);
     this.log.debug('Finished initializing platform:', this.config.name);
 
     // When this event is fired it means Homebridge has restored all cached accessories from disk.
@@ -38,7 +36,7 @@ export class YeelightNgPlatform implements DynamicPlatformPlugin {
     });
 
     this.api.on('shutdown', () => {
-      this.ws.close();
+      destroy();
     });
   }
 
@@ -92,16 +90,5 @@ export class YeelightNgPlatform implements DynamicPlatformPlugin {
         this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
       }
     }
-  }
-
-  sendCommand(uuid: string, type: CommandType, payload?: CommandPayload) {
-    this.log.debug(`Publish for uuid:${uuid} type:${type} payload: ${payload}`);
-    const command = { type, payload };
-    const message = JSON.stringify({ command, uuid });
-    this.ws.send(message);
-  }
-
-  registerStateHandler(uuid: string, handler: (state: State) => void) {
-    this.stateHandlers.set(uuid, handler);
   }
 }

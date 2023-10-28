@@ -1,7 +1,15 @@
 import { CharacteristicValue, PlatformAccessory, Service } from 'homebridge';
 import { Device, YeelightNgPlatform } from './platform';
-import { CommandType, State } from './types';
+import { CommandHandle, State } from './types';
 import { BehaviorSubject } from 'rxjs';
+import NodeBle, { GattCharacteristic } from 'node-ble';
+
+const SERVICE_UUID = '0000fe87-0000-1000-8000-00805f9b34fb';
+const CONTROL_CHAR_UUID = 'aa7d3f34-2d4f-41e0-807f-52fbf8cf7443';
+const NOTIFY_CHAR_UUID = '8f65073d-9f57-4aaa-afea-397d19d5bbeb';
+const CONTROL_HANDLE = 0x43;
+const STATE_HANDLE = 0x45;
+const MAX_RETRIES = 5;
 
 const defaultState = {
   on: false,
@@ -11,6 +19,10 @@ const defaultState = {
   mode: 0,
 };
 
+function delay(ms = 100) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
 /**
  * Platform Accessory
  * An instance of this class is created for each accessory your platform registers
@@ -19,6 +31,10 @@ const defaultState = {
 export class YeelightNgPlatformAccessory {
   private service: Service;
   private state$ = new BehaviorSubject<State>(defaultState);
+  private device!: NodeBle.Device;
+  private controlChar!: GattCharacteristic;
+  private notifyChar!: GattCharacteristic;
+
   constructor(private readonly platform: YeelightNgPlatform, private readonly accessory: PlatformAccessory<Device>) {
     // set accessory information
     this.accessory.getService(this.platform.Service.AccessoryInformation)!
@@ -42,15 +58,77 @@ export class YeelightNgPlatformAccessory {
       .onSet(this.setBrightness.bind(this))       // SET - bind to the 'setBrightness` method below
       .onGet(this.getBrightness.bind(this));      // GET - bind to the 'getBrightness` method below
 
-    this.platform.registerStateHandler(this.uuid, (state: State) => {
-      try {
-        this.state = state;
-        this.service.updateCharacteristic(this.platform.Characteristic.On, this.state.on);
-        this.service.updateCharacteristic(this.platform.Characteristic.Brightness, this.state.brightness);
-      } catch (error) {
-        this.platform.log.error(`Error updating characteristics: ${error}`);
-      }
+    this.platform.api.on('shutdown', async () => {
+      platform.log.debug('shutdown');
+      await this.notifyChar.stopNotifications();
+      this.device.removeAllListeners();
+      await this.device.disconnect();
     });
+    this.init();
+  }
+
+  private async init() {
+    this.device = await this.platform.bleAdapter.getDevice(this.uuid.toUpperCase());
+    await this.device.connect();
+    const gattServer = await this.device.gatt();
+    const service = await gattServer.getPrimaryService(SERVICE_UUID);
+    this.controlChar = await service.getCharacteristic(CONTROL_CHAR_UUID);
+    this.notifyChar = await service.getCharacteristic(NOTIFY_CHAR_UUID);
+    await this.notifyChar.startNotifications();
+    this.notifyChar.on('valuechanged', async buffer => {
+      this.platform.log.debug(`notifyChar hex: ${buffer.toString('hex')}`);
+      this.platform.log.debug(`notifyChar arr: ${new Uint8Array(buffer)}`);
+      this.state = this.parseResponse(buffer);
+    });
+  }
+
+  private async connect(retry = MAX_RETRIES) {
+    if(!retry) {
+      this.platform.log.debug(`Failed to connect after ${MAX_RETRIES} retries`);
+      return;
+    }
+    this.platform.log.debug(`Connect retry: ${MAX_RETRIES + 1 - retry}`);
+    try {
+      await this.device.connect();
+    } catch (e) {
+      this.platform.log.debug('Failed to connect');
+      await delay();
+      await this.connect(--retry);
+    }
+  }
+
+  private getCommandValue(cmd: CommandHandle, val?: boolean | number) {
+    switch (cmd) {
+      case CommandHandle.On:
+        val = val ? 1 : 2;
+        break;
+      case CommandHandle.Flicker:
+        val = 2;
+        break;
+      case CommandHandle.State:
+        val = 0;
+        break;
+      case CommandHandle.Brightness:
+        break;
+    }
+    return val as number;
+  }
+
+  private async sendCommand(cmd: CommandHandle, val?: boolean | number) {
+    this.platform.log.debug(`sendCmd: ${cmd} with val ${val}`);
+    const value = this.getCommandValue(cmd, val);
+    let retry = 2;
+    while (retry > 0) {
+      try {
+        await this.controlChar.writeValue(Buffer.from(new Uint8Array([CONTROL_HANDLE, cmd, value])));
+        break;
+      } catch (e) {
+        this.platform.log.error('disconnected');
+      }
+      this.platform.log.error('reconnecting');
+      await this.connect();
+      retry--;
+    }
   }
 
   /**
@@ -58,7 +136,7 @@ export class YeelightNgPlatformAccessory {
    * These are sent when the user changes the state of an accessory, for example, turning on a Light bulb.
    */
   async setOn(value: CharacteristicValue) {
-    this.platform.sendCommand(this.uuid, CommandType.SetOn, value as boolean);
+    await this.sendCommand(CommandHandle.On, value as boolean);
     this.platform.log.debug('Set Characteristic On ->', value);
   }
 
@@ -76,7 +154,7 @@ export class YeelightNgPlatformAccessory {
    * this.service.updateCharacteristic(this.platform.Characteristic.On, true)
    */
   async getOn(): Promise<CharacteristicValue> {
-    this.platform.sendCommand(this.uuid, CommandType.GetState);
+    await this.sendCommand(CommandHandle.State);
     return this.state.on;
   }
 
@@ -85,12 +163,12 @@ export class YeelightNgPlatformAccessory {
    * These are sent when the user changes the state of an accessory, for example, changing the Brightness
    */
   async setBrightness(value: CharacteristicValue) {
-    this.platform.sendCommand(this.uuid, CommandType.SetBrightness, value as number);
+    await this.sendCommand(CommandHandle.Brightness, value as number);
     this.platform.log.debug('Set Characteristic Brightness -> ', value);
   }
 
   async getBrightness(): Promise<CharacteristicValue> {
-    this.platform.sendCommand(this.uuid, CommandType.GetState);
+    await this.sendCommand(CommandHandle.State);
     return this.state.brightness;
   }
 
@@ -104,16 +182,24 @@ export class YeelightNgPlatformAccessory {
     return state;
   }
 
-  private set state({ on, brightness, color, ct, mode }: State) {
+  private set state({ on, brightness, color }: State) {
     const state: State = {
       on: Boolean(on),
       brightness: brightness >= 0 && brightness <= 100 ? brightness : defaultState.brightness,
       color: Array.isArray(color) ? color : defaultState.color,
-      mode: mode || defaultState.mode,
-      ct: ct || defaultState.ct,
     };
     this.state$.next(state);
     this.platform.log.debug('SetState', state);
   }
 
+  private parseResponse([, stateHandle, on, brightness, r, g, b, white]: Uint8Array): State {
+    if (stateHandle === STATE_HANDLE) {
+      this.platform.log.debug('got state notification');
+    }
+    return {
+      on: on === 1,
+      brightness,
+      color: [r, g, b, white],
+    };
+  }
 }
