@@ -23,16 +23,19 @@ export class YeelightNgPlatform implements DynamicPlatformPlugin {
 
   constructor(readonly log: Logger, readonly config: PlatformConfig, readonly api: API) {
     const { bluetooth, destroy } = createBluetooth();
-    bluetooth.defaultAdapter().then(adapter => this.bleAdapter = adapter);
-    this.log.debug('Finished initializing platform:', this.config.name);
+    bluetooth.defaultAdapter().then(adapter => {
+      this.bleAdapter = adapter;
 
-    // When this event is fired it means Homebridge has restored all cached accessories from disk.
-    // Dynamic Platform plugins should only register new accessories after this event was fired,
-    // in order to ensure they weren't added to homebridge already. This event can also be used
-    // to start discovery of new accessories.
-    this.api.on('didFinishLaunching', () => {
-      this.log.debug('Executed didFinishLaunching callback');
-      this.discoverDevices();
+      this.log.debug('Finished initializing platform:', this.config.name);
+
+      // When this event is fired it means Homebridge has restored all cached accessories from disk.
+      // Dynamic Platform plugins should only register new accessories after this event was fired,
+      // in order to ensure they weren't added to homebridge already. This event can also be used
+      // to start discovery of new accessories.
+      this.api.on('didFinishLaunching', () => {
+        this.log.debug('Executed didFinishLaunching callback');
+        this.discoverDevices();
+      });
     });
 
     this.api.on('shutdown', () => {
