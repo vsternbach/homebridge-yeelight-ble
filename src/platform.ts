@@ -23,19 +23,17 @@ export class YeelightNgPlatform implements DynamicPlatformPlugin {
 
   constructor(readonly log: Logger, readonly config: PlatformConfig, readonly api: API) {
     const { bluetooth, destroy } = createBluetooth();
-    bluetooth.defaultAdapter().then(adapter => {
-      this.bleAdapter = adapter;
 
-      this.log.debug('Finished initializing platform:', this.config.name);
+    this.log.debug('Finished initializing platform:', this.config.name);
 
-      // When this event is fired it means Homebridge has restored all cached accessories from disk.
-      // Dynamic Platform plugins should only register new accessories after this event was fired,
-      // in order to ensure they weren't added to homebridge already. This event can also be used
-      // to start discovery of new accessories.
-      this.api.on('didFinishLaunching', () => {
-        this.log.debug('Executed didFinishLaunching callback');
-        this.discoverDevices();
-      });
+    // When this event is fired it means Homebridge has restored all cached accessories from disk.
+    // Dynamic Platform plugins should only register new accessories after this event was fired,
+    // in order to ensure they weren't added to homebridge already. This event can also be used
+    // to start discovery of new accessories.
+    this.api.on('didFinishLaunching', async () => {
+      this.log.debug('Executed didFinishLaunching callback');
+      this.bleAdapter = await bluetooth.defaultAdapter();
+      await this.discoverDevices();
     });
 
     this.api.on('shutdown', () => {
@@ -53,7 +51,8 @@ export class YeelightNgPlatform implements DynamicPlatformPlugin {
     this.accessories.push(accessory);
   }
 
-  discoverDevices() {
+  async discoverDevices() {
+    this.log.info('Discover devices');
     // loop over the configured devices and register each one if it has not already been registered
     for (const device of this.config.devices || []) {
       // generate a unique id for the accessory this should be generated from
@@ -72,7 +71,8 @@ export class YeelightNgPlatform implements DynamicPlatformPlugin {
 
         // create the accessory handler for the restored accessory
         // this is imported from `platformAccessory.ts`
-        new YeelightNgPlatformAccessory(this, existingAccessory);
+        const dev = new YeelightNgPlatformAccessory(this, existingAccessory);
+        // await dev.init();
 
         // it is possible to remove platform accessories at any time using `api.unregisterPlatformAccessories`, e.g.:
         // remove platform accessories when no longer present
@@ -88,7 +88,8 @@ export class YeelightNgPlatform implements DynamicPlatformPlugin {
         accessory.context = device;
         // create the accessory handler for the newly create accessory
         // this is imported from `platformAccessory.ts`
-        new YeelightNgPlatformAccessory(this, accessory);
+        const dev = new YeelightNgPlatformAccessory(this, accessory);
+        // await dev.init();
         // link the accessory to your platform
         this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
       }
