@@ -3,6 +3,7 @@ import { PLATFORM_NAME, PLUGIN_NAME } from './settings';
 import { YeelightNgPlatformAccessory } from './platformAccessory';
 import { CommandPayload, CommandType, State } from './types';
 import { WebSocketClient } from './ws';
+import { throttle } from './utils';
 
 export interface Device {
   mac: string;
@@ -19,26 +20,29 @@ export class YeelightNgPlatform implements DynamicPlatformPlugin {
   readonly Characteristic: typeof Characteristic = this.api.hap.Characteristic;
 
   // this is used to track restored cached accessories
-  readonly accessories: PlatformAccessory<Device>[] = [];
-
+  private readonly accessories: PlatformAccessory<Device>[] = [];
+  private readonly stateHandlers = new Map<string, (state: State) => void>();
   private ws!: WebSocketClient;
-  private stateHandlers = new Map<string, (state: State) => void>();
 
   constructor(readonly log: Logger, readonly config: PlatformConfig, readonly api: API) {
-    this.ws = new WebSocketClient(this.stateHandlers, log, config.websocket);
-    this.log.debug('Finished initializing platform:', this.config.name);
-
+    const { devices = [], name, websocket } = this.config;
+    this.log.debug('Finished initializing platform:', name);
+    if (devices?.length) {
+      this.ws = new WebSocketClient(this.stateHandlers, log, websocket);
+    } else {
+      this.log.warn('Platform not started, no configured devices');
+    }
     // When this event is fired it means Homebridge has restored all cached accessories from disk.
     // Dynamic Platform plugins should only register new accessories after this event was fired,
     // in order to ensure they weren't added to homebridge already. This event can also be used
     // to start discovery of new accessories.
     this.api.on('didFinishLaunching', () => {
       this.log.debug('Executed didFinishLaunching callback');
-      this.discoverDevices();
+      this.updateAccessories(devices);
     });
 
     this.api.on('shutdown', () => {
-      this.ws.close();
+      this.ws?.close();
     });
   }
 
@@ -52,9 +56,9 @@ export class YeelightNgPlatform implements DynamicPlatformPlugin {
     this.accessories.push(accessory);
   }
 
-  discoverDevices() {
+  updateAccessories(devices: Device[]) {
     // loop over the configured devices and register each one if it has not already been registered
-    for (const device of this.config.devices || []) {
+    for (const device of devices) {
       // generate a unique id for the accessory this should be generated from
       // something globally unique, but constant, for example, the device serial
       // number or MAC address
@@ -68,15 +72,8 @@ export class YeelightNgPlatform implements DynamicPlatformPlugin {
         // if you need to update the accessory.context then you should run `api.updatePlatformAccessories`. eg.:
         existingAccessory.context = device;
         this.api.updatePlatformAccessories([existingAccessory]);
-
         // create the accessory handler for the restored accessory
-        // this is imported from `platformAccessory.ts`
         new YeelightNgPlatformAccessory(this, existingAccessory);
-
-        // it is possible to remove platform accessories at any time using `api.unregisterPlatformAccessories`, e.g.:
-        // remove platform accessories when no longer present
-        // this.api.unregisterPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [existingAccessory]);
-        // this.log.info('Removing existing accessory from cache:', existingAccessory.displayName);
       } else {
         // the accessory does not yet exist, so we need to create it
         this.log.info('Adding new accessory:', device.name);
@@ -86,19 +83,24 @@ export class YeelightNgPlatform implements DynamicPlatformPlugin {
         // the `context` property can be used to store any data about the accessory you may need
         accessory.context = device;
         // create the accessory handler for the newly create accessory
-        // this is imported from `platformAccessory.ts`
         new YeelightNgPlatformAccessory(this, accessory);
         // link the accessory to your platform
         this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
       }
     }
+    const cachedAccessories = this.accessories.filter(a => !devices.some((d: Device) => d.mac === a.context.mac));
+    if (cachedAccessories?.length) {
+      this.log.info('Removing non configured cached accessories:', cachedAccessories.map(a => a.displayName).join(','));
+      this.api.unregisterPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, cachedAccessories);
+    }
   }
 
+  @throttle()
   sendCommand(uuid: string, type: CommandType, payload?: CommandPayload) {
     this.log.debug(`Publish for uuid:${uuid} type:${type} payload: ${payload}`);
     const command = { type, payload };
     const message = JSON.stringify({ command, uuid });
-    this.ws.send(message);
+    this.ws?.send(message);
   }
 
   registerStateHandler(uuid: string, handler: (state: State) => void) {
